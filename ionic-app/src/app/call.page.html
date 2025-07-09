@@ -1,0 +1,21 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Voice Call</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+
+  <ion-text color="primary">
+    <h4>Status: {{ callStatus }}</h4>
+  </ion-text>
+
+  <ion-list>
+    <ion-item *ngFor="let user of userList" (click)="startCall(user)">
+       Call {{ user.id }}
+    </ion-item>
+  </ion-list>
+
+  <ion-button expand="full" color="danger" (click)="hangUp()">Hang Up</ion-button>
+
+</ion-content>
