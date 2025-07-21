@@ -25,6 +25,11 @@ io.on('connection', (socket) => {
     console.log(`🔐 Registered ${userId} -> ${socket.id}`);
     io.emit('user-list', users);
   });
+// io.on('connection', (socket) => {
+//   const userId = socket.handshake.query.userId;
+//   users[userId] = socket.id;
+//   console.log(`Registered ${userId} via handshake`);
+
 
   socket.on('call-user', (data) => {
     const targetSocketId = users[data.to];
