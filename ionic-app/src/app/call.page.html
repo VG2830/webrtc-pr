@@ -6,6 +6,10 @@
 
 <ion-content class="ion-padding">
 
+    <ion-item *ngFor="let  user of userList">
+ Available users {{user.id}}
+    </ion-item>
+  
   <ion-text color="primary">
     <h4>Status: {{ callStatus }}</h4>
   </ion-text>
@@ -17,6 +21,6 @@
   </ion-list>
 
 
-  <ion-button expand="full" color="danger" (click)="hangUp()">Hang Up</ion-button>
+  <ion-button id="endcall" expand="full" color="danger" (click)="hangUp()" >Hang Up</ion-button>
 
 </ion-content>

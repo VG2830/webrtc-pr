@@ -26,6 +26,7 @@ export class CallPage implements OnInit {
   configuration = {
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }], //stun server
   };
+  hangbtn!: any;
   
 constructor(private androidPermissions: AndroidPermissions) {
     this.initUserId();
@@ -151,7 +152,7 @@ constructor(private androidPermissions: AndroidPermissions) {
         // this.pendingCandidates = [];
         const answer = await this.peerConnection.createAnswer();
         await this.peerConnection.setLocalDescription(answer);
-        this.socket.emit('make-answer', { answer, to: data.from                  });
+        this.socket.emit('make-answer', { answer, to: data.from});
       } catch (err) {
         console.error('Error handling call-made:', err);
         this.callStatus = 'Error: ' + this.getErrorMessage(err);
@@ -285,6 +286,8 @@ async startCall(user: { id: string; socketId: string }) {
       console.log('Connection state:', this.peerConnection.connectionState);
       if (this.peerConnection.connectionState === 'connected') {
         this.callStatus = 'Connected ✅';
+        // const hangbtn=document.getElementById("endcall");
+        // hangbtn.style.display="block";
       } else if (
         this.peerConnection.connectionState === 'disconnected' ||
         this.peerConnection.connectionState === 'failed'

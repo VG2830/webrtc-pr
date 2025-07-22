@@ -6,7 +6,7 @@ const cors = require('cors');
 
 const app = express();
 app.use(cors());
-app.use(express.static('client')); // serve frontend
+app.use(express.static('ionic-app/src/app')); // serve frontend
 
 const server = http.createServer(app);
 const io = socketIo(server, {
