@@ -22,5 +22,6 @@
 
 
   <ion-button id="endcall" expand="full" color="danger" (click)="hangUp()" >Hang Up</ion-button>
+<audio *ngIf="remoteStream" autoplay controls [srcObject]="remoteStream"></audio>
 
 </ion-content>

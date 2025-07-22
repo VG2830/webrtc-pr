@@ -11,7 +11,7 @@ import { io, Socket } from 'socket.io-client';
   templateUrl: './call.page.html',
   styleUrls: ['./call.page.scss'],
 })
-export class CallPage implements OnInit {
+export class CallPage  {
   socket!: Socket;
   peerConnection!: RTCPeerConnection;
   localStream!: MediaStream;
@@ -23,9 +23,22 @@ export class CallPage implements OnInit {
   pendingCandidates: RTCIceCandidate[] = [];
   remoteDescriptionSet = false;
 
+  // configuration = {
+  //   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }], //stun server
+  // };
+  //turn server necessary for production
+
   configuration = {
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }], //stun server
-  };
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    }
+  ]
+};
+
   hangbtn!: any;
   
 constructor(private androidPermissions: AndroidPermissions) {
@@ -62,25 +75,6 @@ constructor(private androidPermissions: AndroidPermissions) {
     return String(err);
   }
 
-  async ngOnInit() {
-  await this.initUserId();
-  
-  const micPermissionGranted = await this.checkPermission();
-
-  if (!micPermissionGranted) {
-    this.callStatus = 'Microphone permission denied';
-    return;
-  }
-
-  try {
-    await this.getMicrophoneAccess();
-    await this.setUpConnection();
-  } catch (err) {
-    console.error('Initialization error:', err);
-    this.callStatus = 'Error: ' + this.getErrorMessage(err);
-  }
-}
-
   async ionViewDidEnter(){
     await this.initUserId();
 
@@ -115,6 +109,8 @@ constructor(private androidPermissions: AndroidPermissions) {
   async setUpConnection() {
     this.socket = io('https://webrtc-pr.onrender.com');
 
+    // this.socket = io('http://localhost:3000');
+
     this.socket.on('connect', () => {
       console.log('Socket connected:', this.socket.id);
       this.socket.emit('register', this.currentUserId);
@@ -126,68 +122,88 @@ constructor(private androidPermissions: AndroidPermissions) {
         .filter(([id]) => id !== this.currentUserId)
         .map(([id, socketId]) => ({ id, socketId }));
     });
+//call-made
+  this.socket.on('call-made', async (data) => {
+  try {
+    console.log('📞 Incoming call from:', data.from);
+    
+    // Create peer connection
+    this.peerConnection = new RTCPeerConnection(this.configuration);
+    this.setupPeerConnectionListeners(data.from);
 
-    this.socket.on('call-made', async (data) => {
-      try {
-        this.peerConnection = new RTCPeerConnection(this.configuration);
-        this.setupPeerConnectionListeners(data.from);
-      this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // Add local audio track
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => {
+        this.peerConnection.addTrack(track, this.localStream);
+      });
+    }
 
-        if (this.localStream) {
-          this.localStream.getTracks().forEach((track) => {
-            this.peerConnection.addTrack(track, this.localStream);
-          });
-        }
-        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer || data.answer));
-        // Add pending ICE candidates after remote description is set
-        this.remoteDescriptionSet = true;
-        await this.flushPendingCandidates();
-        // for (const candidate of this.pendingCandidates) {
-        //   try {
-        //     await this.peerConnection.addIceCandidate(candidate);
-        //   } catch (err) {
-        //     console.error('Failed to add pending ICE candidate:', err);
-        //   }
-        // }
-        // this.pendingCandidates = [];
-        const answer = await this.peerConnection.createAnswer();
-        await this.peerConnection.setLocalDescription(answer);
-        this.socket.emit('make-answer', { answer, to: data.from});
-      } catch (err) {
-        console.error('Error handling call-made:', err);
-        this.callStatus = 'Error: ' + this.getErrorMessage(err);
-      }
+    // ✅ Correct: only handle offer here
+    await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+
+    // ✅ Answer creation
+    const answer = await this.peerConnection.createAnswer();
+    await this.peerConnection.setLocalDescription(answer);
+
+    // ✅ Send answer
+    this.socket.emit('make-answer', {
+      answer,
+      to: data.from
     });
 
-    this.socket.on('answer-made', async (data) => {
-      try {
-        if (this.peerConnection) {
-          await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-          this.remoteDescriptionSet = true;
-          await this.flushPendingCandidates();
-          // Add pending ICE candidates after remote description is set
-          // for (const candidate of this.pendingCandidates) {
-          //   try {
-          //     await this.peerConnection.addIceCandidate(candidate);
-          //   } catch (err) {
-          //     console.error('Failed to add pending ICE candidate:', err);
-          //   }
-          // }
-          // this.pendingCandidates = [];
-        }
-      } catch (err) {
-        console.error('Error handling answer-made:', err);
-        this.callStatus = 'Error: ' + this.getErrorMessage(err);
-      }
-    });
+    // ✅ Now set flag and flush pending ICE
+    this.remoteDescriptionSet = true;
+    await this.flushPendingCandidates();
 
+  } catch (err) {
+    console.error('Error handling call-made:', err);
+    this.callStatus = 'Error: ' + this.getErrorMessage(err);
+  }
+});
+
+//call-made
+
+
+//answer-made
+
+this.socket.on('answer-made', async (data) => {
+  try {
+    if (this.peerConnection) {
+      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+      this.remoteDescriptionSet = true;
+      await this.flushPendingCandidates();
+    }
+  } catch (err) {
+    console.error('Error handling answer-made:', err);
+  }
+});
+
+  // old code
+
+  // this.socket.on('answer-made', async (data) => {
+  //     try {
+  //       if (this.peerConnection) {
+  //         await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+  //         this.remoteDescriptionSet = true;
+  //         await this.flushPendingCandidates();
+        
+  //       }
+  //     } catch (err) {
+  //       console.error('Error handling answer-made:', err);
+  //       this.callStatus = 'Error: ' + this.getErrorMessage(err);
+  //     }
+  //   });
+
+//answer-made
+  
     this.socket.on('ice-candidate', async (data) => {
       try {
         const candidate = new RTCIceCandidate(data.candidate);
         if (this.peerConnection) {
           if (this.remoteDescriptionSet) {
             try {
-              await this.peerConnection.addIceCandidate(candidate);
+              console.log('Remote ICE candidate received:', data.candidate);
+              await this.peerConnection.addIceCandidate(data.candidate);
             } catch (err) {
               console.error('Failed to add ICE candidate:', err);
             }
@@ -244,7 +260,7 @@ async startCall(user: { id: string; socketId: string }) {
     console.log(`📞 Calling ${user.id}`);
     this.peerConnection = new RTCPeerConnection(this.configuration);
     this.setupPeerConnectionListeners(user.id);
-      this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
        console.log(this.localStream);
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => {
@@ -265,8 +281,17 @@ async startCall(user: { id: string; socketId: string }) {
 
   setupPeerConnectionListeners(targetUserId: string) {
     if (!this.peerConnection) return;
+    //
+    // this.peerConnection.ontrack = (event) => {
+    //   this.remoteStream = event.streams[0];
+    //   const audio = new Audio();
+    //   audio.srcObject = this.remoteStream;
+    //   audio.play();
+    // };
+    //
     this.peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
+        console.log('local ice candi',event.candidate);
         this.socket.emit('ice-candidate', {
           candidate: event.candidate,
           to: targetUserId,
@@ -279,13 +304,13 @@ async startCall(user: { id: string; socketId: string }) {
         this.remoteStream = new MediaStream();
       }
       this.remoteStream.addTrack(event.track);
-      this.callStatus = 'Connected ✅';
+      this.callStatus = 'Connected track ✅';
     };
 
     this.peerConnection.onconnectionstatechange = () => {
       console.log('Connection state:', this.peerConnection.connectionState);
       if (this.peerConnection.connectionState === 'connected') {
-        this.callStatus = 'Connected ✅';
+        this.callStatus = ' Final Connected ✅';
         // const hangbtn=document.getElementById("endcall");
         // hangbtn.style.display="block";
       } else if (
@@ -293,6 +318,7 @@ async startCall(user: { id: string; socketId: string }) {
         this.peerConnection.connectionState === 'failed'
       ) {
         this.callStatus = 'Disconnected ❌';
+         this.hangUp();
       }
     };
   }
